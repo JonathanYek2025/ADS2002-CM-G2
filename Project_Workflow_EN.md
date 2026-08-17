@@ -1,409 +1,316 @@
-# ADS2002 Counting Molecules Project Workflow
+---
+title: Counting Molecules Four-Part Project Workflow
+aliases:
+  - Counting Molecules Workflow English
+tags:
+  - ADS2002
+  - CountingMolecules
+  - STM
+  - Workflow
+language: en
+---
 
-## 1. Project Definition
+# Counting Molecules Four-Part Project Workflow
 
-### 1.1 Proposed Title
+## 1. Project Topic
 
-**Refining Molecular Fingerprints for Automated Counting and Unsupervised Categorisation of Molecules in STM Images**
+**Automated molecule detection, counting, and morphology classification in STM images**
 
-### 1.2 Project Aim
+This project uses one manually annotated molecular image to establish the **ground truth**. It first compares molecule extraction methods and classification methods separately, then selects the best complete pipeline and applies it to other unlabelled STM images.
 
-This project uses the Counting Molecules method developed by Hellerstedt et al. as its baseline. It will first reproduce the three examples presented in the paper, then improve the algorithm through more robust background correction, segmentation of touching objects, and molecular fingerprint design. Independent manual annotations will be used to evaluate automated detection, counting, and morphological categorisation. The finalised pipeline will then be applied to all independent STM images, and the client will be advised about the image conditions under which the method is reliable and the situations that require manual review.
+> [!important]
+> The annotated image is an evaluation reference, not an algorithm input. The algorithm must operate on the raw STM data, height matrix, or uncoloured greyscale image.
 
-The main project sequence is:
+## 2. Target Image and Research Scope
 
-```text
-Reproduce the published method
--> Establish manual ground truth
--> Analyse failure modes
--> Improve preprocessing and segmentation
--> Develop molecular fingerprints and categorisation
--> Quantitatively compare the baseline and improved methods
--> Extend the selected method to the full dataset
--> Produce client recommendations
-```
+This project selects **`Helicene_Ag(111)008.sxm`** as the common target image and evaluation benchmark for Parts A, B, and C. The main reason for selecting this image is that the associated research paper provides a **manual count or manually annotated result** for the corresponding STM image. This enables the paper result to be used as ground truth for objective algorithm evaluation.
 
-The APT condition analysis is an application of the algorithm. It does not replace the central tasks of molecule detection, counting, and categorisation.
+The image scope of each part is defined as follows:
 
-## 2. Research Questions and Hypotheses
+- **Part A:** compare preprocessing, segmentation, and molecule extraction methods on `Helicene_Ag(111)008.sxm`;
+- **Part B:** compare feature representations and classification algorithms using molecular objects from the same image;
+- **Part C:** continue using the same image to compare the end-to-end performance of complete extraction and classification combinations;
+- **Part D:** fix the best pipeline selected in Part C, apply it to other unlabelled `.p` and `.sxm` images, and analyse its generalisability.
 
-### 2.1 Research Questions
+The benchmark must separate two different sources of information:
 
-1. Can the published method produce similar counting and classification results on the three example files supplied locally?
-2. Can improved preprocessing and watershed segmentation increase detection accuracy when images contain uneven backgrounds, scan-line artefacts, or touching molecules?
-3. Which set of molecular fingerprints is most suitable for distinguishing molecular morphologies and, exploratorily, separating APT, MgPc, and Helicene?
-4. Can the improved pipeline transfer to STM images that were not used during initial development and tuning?
-5. Within the APT data, what descriptive differences in molecular density and morphology proportions are observed under different experimental conditions?
+- **Algorithm input:** the raw STM height matrix or uncoloured greyscale image read from `Helicene_Ag(111)008.sxm`;
+	- ![[Pasted image 20260811101827.png]]
+- **Evaluation reference:** the manual count, molecular centres, or category annotations reported for the image in the paper.
+	- ![[Pasted image 20260811101850.png]]
 
-### 2.2 Testable Hypotheses
+Before algorithm comparison, the correspondence between the paper figure and the `.sxm` data must be verified by checking the molecular arrangement, image orientation, cropped region, scale, and spatial registration. If the paper provides only a manual total, only **Count Error** can be evaluated directly. TP, FP, FN, Precision, Recall, F1-score, and complete object-level evaluation require molecular centre locations or recoverable annotation positions.
 
-- **H1:** Compared with the published baseline, robust preprocessing and watershed segmentation will reduce counting error and improve detection F1.
-- **H2:** Combining Zernike moments with geometric and intensity features will agree more closely with manual morphology labels and known molecular-system labels than using either Zernike or geometric features alone.
-- **H3:** The improved pipeline will be more stable on images containing background tilt, scan-line artefacts, strong edge artefacts, and clustered molecules.
+> [!important]
+> Parts A, B, and C use the same benchmark so that all methods are compared fairly using the same data and ground truth. Part D does not repeat algorithm selection; it tests whether the selected pipeline generalises to other STM images.
 
-## 3. Data Scope
+## 3. Part A: Preprocessing and Molecule Extraction
 
-### 3.1 Primary Analysis Data
+### 3.1 Objective
 
-The primary analysis includes all `.p` and `.sxm` files: two `.p` files and twelve `.sxm` files, giving 14 files in total. However, the following files contain exactly the same image data:
+Compare image preprocessing, segmentation, and object extraction methods to determine which method detects individual molecules most accurately in an STM image.
 
-- `Hellerstedt APT/111_test_data.p`
-- `Hellerstedt APT/Ag111_APT_111.sxm`
+Preprocessing is not simply intended to make the image look cleaner. It must remove background variation and noise while:
 
-The formal statistical analysis will therefore contain **13 independent images**. The duplicate files will only be used to verify that the two file formats produce identical readings.
+- preserving real molecules;
+- preventing noise from being detected as molecules;
+- separating touching or overlapping molecules;
+- producing individual molecular objects for counting and classification.
 
-`Christian Wackerlin/1705_6.txt` will be retained as an additional data-reading example, but it will not be included in the main model comparison because its experimental condition, physical scale, and relationship to the paper benchmarks are currently unclear.
-
-### 3.2 Data Used for Reproducing the Paper
-
-| Local file | Paper example | Published algorithm output | Role in this project |
-| :--- | :--- | :--- | :--- |
-| `Hellerstedt APT/Ag111_APT_CO_044.p` | Figure 2 | 145 contours, 6 categories | APT benchmark 1 |
-| `Hellerstedt APT/111_test_data.p` | Figure 3 | 87 contours, 9 categories | APT benchmark 2 |
-| `Stetsovych Helicene/Helicene_Ag(111)008.sxm` | Figure 4 | 252 contours, 7 categories after chirality processing | Helicene benchmark |
-
-These values are outputs from the published algorithm, not manual ground truth. Differences caused by software versions, parameter interpretation, or data-reading behaviour are acceptable during reproduction only if their sources are identified and explained.
-
-### 3.3 Data Roles
-
-| Data role | Images | Purpose |
-| :--- | :--- | :--- |
-| Baseline benchmark | The three paper example files | Reproduction, manual annotation, and baseline-versus-improved comparison |
-| Easy extension | APT 007-010 and Helicene 020 | Assess transferability and basic stability |
-| Hard cases | UV/annealed APT, MgPc, and Helicene 021 | Assess clustering, scan lines, and strong edge artefacts |
-| Duplicate check | APT 111 in `.p` and `.sxm` formats | Verify reading consistency without double-counting |
-
-### 3.4 The Three Label Types Must Remain Separate
-
-- `species`: APT, MgPc, or Helicene.
-- `condition`: an image-level experimental or imaging condition, such as Baseline, CO-functionalised tip, UV exposure, or annealing.
-- `morphology`: a molecule-level observation, such as isolated, three-lobe, dimer, clustered, chiral form, or uncertain.
-
-`condition` is not a class to be predicted from an individual molecule. A CO-functionalised tip is an imaging condition and must not be conflated with the effects of sample treatments such as UV exposure or annealing.
-
-## 4. Staged Project Workflow
-
-### Stage 0: Data Registration and Quality Assessment
-
-**Input:** All `.p` and `.sxm` files, plus the additional `.txt` file.
-
-**Processing:**
-
-1. Develop a common reader that returns a two-dimensional height matrix and nm/pixel.
-2. Record the filename, format, shape, scan range, species, condition, and data source.
-3. Check for NaN values, extreme values, scan direction, background tilt, scan lines, and edge artefacts.
-4. Identify duplicate images through direct array comparison or hashing.
-5. Generate a raw-image contact sheet and an intensity summary for every image.
-
-**Outputs:**
-
-- `outputs/tables/image_manifest.csv`
-- `outputs/figures/data_quality/raw_contact_sheet.png`
-- `outputs/tables/duplicate_check.csv`
-- A documented list of data-quality issues
-
-**Completion criterion:** All 14 `.p`/`.sxm` files are readable; the identities of all 13 independent images are clear; duplicate files are not counted twice in later analysis.
-
-### Stage 1: Reproduction of the Published Baseline
-
-**Input:** The three example images used in the paper.
-
-**Processing:**
-
-1. Use the authors' reading logic to obtain the image and physical pixel scale.
-2. Apply Gaussian low-frequency background subtraction, maximum-value normalisation, and two-dimensional plane fitting.
-3. Use an Otsu-scaled local threshold to extract closed contours.
-4. Filter edge contours and contours that are too small according to the authors' rules.
-5. Generate centred molecular templates.
-6. Calculate Zernike moments, normalised contour length, and normalised maximum height.
-7. Reproduce BIRCH, Agglomerative Clustering, and hand-selected-exemplar Affinity Propagation.
-8. Reproduce mirror-template chirality classification for the Helicene example.
-
-**Outputs:**
-
-- Baseline preprocessing figures, binary masks, numbered contour figures, and template grids
-- Baseline classification figures and category histograms
-- `outputs/tables/baseline_results.csv`
-- A comparison between the published and locally reproduced outputs
-
-**Completion criterion:** All three examples run successfully; interpretable contours and categories are produced; every parameter is recorded; similarity to the published counts is not treated as proof of accuracy.
-
-### Stage 2: Manual Ground Truth
-
-**Minimum annotation scope:** The three paper benchmarks.
-
-**Recommended extension:** Add one clustered APT image, the MgPc image, and Helicene 021 so that manual validation covers the main failure modes.
-
-**Annotation rules:**
-
-1. Mark the visually identified molecular centre on the raw image or an image for which only the display range has been adjusted.
-2. Do not display algorithm predictions during manual annotation, to avoid confirmation bias.
-3. Mark touching molecules separately when their centres remain distinguishable.
-4. Label clusters for which the number of molecules cannot be determined as `uncertain_cluster`.
-5. Label steps, dark pits, and scan defects as artifacts rather than molecules.
-6. Label incomplete objects on the image boundary as `partial_edge`.
-7. Use a predefined morphology label guide; use `uncertain` when morphology cannot be determined.
-8. Conduct a second independent review and record the reason for every revision.
-
-**Annotation table fields:**
+### 3.2 Main Process
 
 ```text
-image_id, object_id, x_pixel, y_pixel, morphology,
-is_clustered, is_partial_edge, confidence, annotator, notes
+Raw STM image or height matrix
+→ Standardise image orientation, dimensions, and pixel scale
+→ Crop the valid region and handle image boundaries
+→ Apply background or plane correction
+→ Apply denoising and intensity normalisation
+→ Use thresholding to generate a binary mask
+→ Clean the mask with morphological operations
+→ Use a distance transform to identify centre candidates
+→ Use watershed segmentation to separate touching molecules
+→ Extract each molecular contour and centre point
+→ Compare the result with the ground truth
 ```
 
-**Outputs:**
+### 3.3 Candidate Methods
 
-- `annotations/manual_annotations.csv`
-- `annotations/annotation_guide.md`
-- Manual overlay figures and manual totals for each benchmark
+- The preprocessing and extraction method reproduced from the paper;
+- Gaussian filtering with Otsu thresholding;
+- Background correction with adaptive thresholding;
+- Morphological operations with connected-component analysis;
+- Distance transform with watershed segmentation;
+- An improved method constructed from the experimental findings.
 
-**Completion criterion:** Every annotation is traceable to coordinates in the original image; uncertain objects and artifacts follow explicit rules; manual results are independent of algorithm-generated contours.
+### 3.4 Evaluation
 
-### Stage 3: Improved Preprocessing
+Detected molecular centres or segmented regions are matched to the ground truth:
 
-**Candidate methods:**
+- **TP (True Positive):** a real molecule is correctly detected;
+- **FP (False Positive):** background or noise is incorrectly detected as a molecule;
+- **FN (False Negative):** a real molecule is missed;
+- **Precision:** the proportion of detected objects that are real molecules;
+- **Recall:** the proportion of ground-truth molecules that are detected;
+- **F1-score:** the harmonic mean of precision and recall;
+- **Count Error:** the difference between the automated and manual counts.
 
-- Row-median subtraction or low-order row-wise fitting for scan-line artefacts
-- Robust two-dimensional plane fitting for global tilt
-- Large-scale Gaussian or morphological background estimation for slowly varying backgrounds
-- Percentile normalisation to prevent a single very bright pixel from controlling the intensity range
-- An ROI mask for the strong bright edge in Helicene 021
+Overlay visualisations should also be inspected for:
 
-These background-correction methods must not all be stacked unconditionally. Each step should only be retained after comparing raw and preprocessed images and confirming that molecular signals are preserved. Wherever possible, filtering scales should be converted from nanometres to pixels rather than fixed at 50 pixels for images of different resolutions.
+- missed small molecules;
+- noise-related false detections;
+- touching molecules merged into one object;
+- one molecule incorrectly split into several objects;
+- false detections near image boundaries.
 
-**Outputs:**
+### 3.5 Outputs
 
-- Raw, estimated-background, flattened, and normalised comparisons for each image
-- `outputs/tables/preprocessing_parameters.csv`
-- `outputs/masks/valid_roi/`
+- A binary mask from each method;
+- Molecular contours and centre coordinates;
+- Ground-truth and prediction overlay figures;
+- A detection-metric comparison table;
+- A shortlist of the best molecule extraction methods.
 
-**Completion criterion:** Background variation and scan lines are reduced without substantially weakening molecular peaks, sizes, or morphologies; all parameters are reproducible.
+## 4. Part B: Molecule Classification
 
-### Stage 4: Improved Segmentation and Counting
+### 4.1 Objective
 
-**Processing:**
+Compare feature representations and classification algorithms on a consistent set of individual molecular objects to determine which method best distinguishes molecular morphologies or categories.
 
-1. Compare global Otsu and adaptive/local thresholding.
-2. Clean the mask using opening, closing, small-object removal, and border clearing.
-3. Calculate a distance transform for touching objects.
-4. Generate reliable markers and apply watershed segmentation.
-5. Filter artifacts using physical area, dimensions, intensity, and ROI rules.
-6. Export the centre, contour, label ID, and count for each detected object.
+For a fair comparison, the classification methods should use the same molecular objects, such as ground-truth molecular regions or objects generated by one fixed extraction method. This prevents detection errors from Part A from confounding the classification comparison.
 
-**Outputs:**
-
-- Threshold masks, distance maps, watershed labels, and final detections
-- `outputs/tables/detected_objects.csv`
-- `outputs/tables/image_counts.csv`
-
-**Completion criterion:** Every image has a complete diagnostic sequence:
+### 4.2 Main Process
 
 ```text
-Raw -> Flattened -> Threshold -> Watershed -> Final detections
+Extracted individual molecules
+→ Crop each local molecular image
+→ Centre and resize each object, with rotation normalisation if required
+→ Extract shape, intensity, height, contour, and texture features
+→ Combine the features into a molecular fingerprint
+→ Standardise the feature matrix
+→ Apply different classification or clustering algorithms
+→ Assign a category label to each molecule
+→ Compare the result with the manual category labels
+→ Calculate the total count and the count and proportion of each category
 ```
 
-### Stage 5: Molecular Fingerprints and Categorisation
+### 4.3 Candidate Features
 
-**Features extracted from each object:**
+- Area, perimeter, circularity, and aspect ratio;
+- Mean intensity, maximum height, and height distribution;
+- Contour and shape descriptors;
+- Hu moments;
+- Zernike moments;
+- Texture features;
+- A combined molecular fingerprint.
 
-- Area, perimeter, and equivalent diameter
-- Eccentricity, solidity, extent, and aspect ratio
-- Mean, maximum, and integrated intensity
-- Zernike moments
-- Local texture or a radial profile where justified
+### 4.4 Candidate Algorithms
 
-Size-based features should retain physical units. The following feature sets must be compared separately:
+- Affinity Propagation;
+- K-Means;
+- Agglomerative Clustering;
+- BIRCH;
+- DBSCAN or HDBSCAN;
+- Random Forest, SVM, or KNN if sufficient manual labels are available.
 
-1. Geometry and intensity only
-2. Zernike only
-3. Combined fingerprints
+### 4.5 Evaluation
 
-Unsupervised categorisation will primarily use BIRCH, Agglomerative Clustering, or Affinity Propagation. The analysis has two levels. The first examines morphology clusters within the same molecular system. The second explores whether the fingerprints separate the known APT, MgPc, and Helicene systems. Manual morphology labels will be used to evaluate clustering agreement, rather than assigning unsupported chemical identities to arbitrary cluster numbers.
+When manual category labels are available for individual molecules, the following metrics can be used:
 
-Cross-species analysis must be validated by grouping observations at the image level. Molecules from the same image must not be randomly divided between training and test sets and then used to claim generalisation. Because MgPc is represented by only one image, its results can only demonstrate separability within the available image, not generalisation to unseen MgPc images. If the number and consistency of manual labels are sufficient, a simple supervised model may be added as an extension, but it must not replace the main unsupervised-categorisation objective.
+- Classification Accuracy;
+- Precision, Recall, and F1-score;
+- Macro F1-score;
+- Confusion Matrix;
+- Count Error for each category.
 
-**Outputs:**
+For unsupervised clustering, the analysis can additionally use:
 
-- `outputs/tables/molecule_features.csv`
-- Fingerprint correlations, PCA/UMAP, and cluster visualisations
-- Exploratory separation results using known APT, MgPc, and Helicene labels
-- Representative templates and manual interpretations for each cluster
-- `outputs/tables/molecule_categories.csv`
+- Adjusted Rand Index (ARI);
+- Normalised Mutual Information (NMI);
+- The best mapping between clusters and manual categories;
+- The interpretability and consistency of representative molecules in each cluster.
 
-### Stage 6: Quantitative Baseline-versus-Improved Evaluation
+### 4.6 Outputs
 
-**Detection matching:** Use one-to-one matching within an allowed distance to connect automated centres with manually annotated centres.
+- A feature table containing one row per molecule;
+- A predicted category for each molecule;
+- A classification-algorithm comparison table;
+- A confusion matrix or clustering evaluation results;
+- Representative molecular images for each category;
+- A shortlist of the best classification methods.
 
-- TP: an automated detection successfully matched to a manual object
-- FP: an automated detection with no matching manual object
-- FN: a manual object with no matching automated detection
+## 5. Part C: Selecting the Best Complete Pipeline
 
-**Metrics:**
+### 5.1 Objective
+
+Combine the strongest extraction methods from Part A with the strongest feature and classification methods from Part B, and compare the end-to-end performance of the resulting pipelines.
+
+It is not necessary to test every possible combination. The methods can first be shortlisted separately, after which a manageable number of complete candidate pipelines can be constructed.
+
+### 5.2 Classification Scope and Highest-Level Objective
+
+The classification evaluation in this project **ignores handedness differences**. Handedness 1 and Handedness 2 examples with the same molecular structure or aggregation form are merged into one category. The model is therefore not required to determine left- and right-handed adsorption configurations.
+
+The target categories in Part C are:
+
+- **Tetramer of P1:** an assembly containing four P1 units;
+	- ![[Pasted image 20260811101517.png]]
+- **Trimer of P1:** an assembly containing three P1 units;
+	- ![[Pasted image 20260811101528.png]]
+- **Dimer of P1:** an assembly containing two P1 units;
+	- ![[Pasted image 20260811101538.png]]
+- **P2:** an individual P2 molecule;
+	- ![[Pasted image 20260811101552.png]]
+- **P3:** an individual P3 molecule.
+	- ![[Pasted image 20260811101624.png]]
+
+The classification objective has two levels of difficulty:
+
+1. **Core objective:** distinguish the tetramer, trimer, and dimer of P1 using object area, contour, number of bright lobes, and spatial arrangement. These classes contain different numbers of P1 molecular units and therefore have relatively clear differences in overall STM size and morphology.
+2. **Highest-level objective:** further distinguish P2 from P3. This is the most difficult classification task because both are planar individual molecules with similar apparent sizes and STM appearances.
+
+According to the chemical structures reported in the paper, P2 is **dibenzo[a,m]indeno[1,2,3-e,f]coronene**, whereas P3 is **dibenzo[a,g]coronene**. In non-specialist terms, both are planar polycyclic molecules formed from fused carbon rings, but their molecular frameworks are not identical. Counting the fused rings shown in the structural formula, P2 contains an 11-ring fused carbon framework, whereas P3 contains 9 rings. P2 includes an additional **indeno-fused structural unit**, giving it a theoretically larger molecular framework and projected footprint, as well as a different structural symmetry from P3.
+![[Pasted image 20260811101640.png]]![[Pasted image 20260811101733.png|233]]
+
+However, an STM image represents apparent height and intensity arising from local electronic states rather than a direct photograph of molecular geometry. The apparent areas, intensities, and contours of P2 and P3 may therefore overlap considerably, and the assumption that "P2 is slightly larger" may not be sufficient for reliable classification. The model should combine area, contour, symmetry, intensity distribution, Zernike moments, and other relevant features.
+
+The **ideal result** is reliable separation of P2 and P3. If the available image resolution or feature representation is insufficient, the two classes may instead be reported as **`P2/P3 unresolved monomer`**. This should not be presented as successful fine-grained classification. The limitation should be demonstrated using the confusion matrix, class-level F1-scores for P2 and P3, overlapping feature distributions, and the physical limitations of STM imaging. With transparent evaluation, an inability to separate these two classes remains a scientifically meaningful result.
+
+### 5.3 Main Process
 
 ```text
-Precision = TP / (TP + FP)
-Recall = TP / (TP + FN)
-F1 = 2 * Precision * Recall / (Precision + Recall)
-Absolute count error = |predicted count - manual count|
-Relative count error = absolute count error / manual count
+Candidate molecule extraction method
++ Candidate feature set
++ Candidate classification algorithm
+→ Construct several complete pipelines
+→ Run every pipeline on the same annotated benchmark image
+→ Match detected objects to the ground truth
+→ Calculate detection, counting, and classification results
+→ Calculate end-to-end performance
+→ Rank the candidates and select the best pipeline
 ```
 
-When reliable manual class labels are available, classification will be evaluated using a confusion matrix and macro-F1. Unsupervised clustering will be evaluated using silhouette score, adjusted Rand index, or normalised mutual information, together with manual interpretation of representative templates.
+### 5.4 Core Metrics
 
-**Comparison experiments:**
+The complete pipeline should be evaluated using:
 
-| Experiment | Purpose |
-| :--- | :--- |
-| Paper baseline | Establish the performance of the original method |
-| Improved preprocessing only | Isolate the contribution of background correction |
-| Improved preprocessing plus watershed | Isolate the contribution of touching-object separation |
-| Geometry only vs Zernike only vs combined | Isolate the contribution of fingerprint design |
+- Detection Precision, Recall, and F1-score;
+- Total Molecule Count Error;
+- Classification Accuracy or Macro F1-score;
+- Count Error for each molecular category;
+- End-to-end Accuracy;
+- Stability, interpretability, computational complexity, and runtime.
 
-**Outputs:**
+Before calculating classification metrics, Handedness 1 and Handedness 2 examples of the same structure should be merged into one label so that the evaluation matches the defined project objective. In addition to the overall Macro F1-score, Precision, Recall, F1-score, and mutual confusion counts should be reported separately for P2 and P3.
 
-- `outputs/tables/evaluation_metrics.csv`
-- Baseline-versus-improved comparison tables and figures
-- FP, FN, touching-object, and artifact failure-case figures
-- A confusion matrix or clustering-agreement results
+End-to-end accuracy can be defined as:
 
-**Target reference:** Aim for a benchmark detection F1 of at least 0.80 and a relative count error no greater than 15%. These are project targets, not guaranteed outcomes. If they are not achieved, the causes of failure and the applicable operating range must be analysed.
+$$
+\text{End-to-end Accuracy}
+=
+\frac{\text{Number of molecules correctly detected and classified}}
+{\text{Total number of ground-truth molecules}}
+$$
 
-### Stage 7: Full-Dataset Extension and Generalisation Assessment
+### 5.5 Outputs
 
-After method selection is completed on the benchmarks, freeze the main pipeline and apply it to the remaining independent images. A small number of predefined configurations may be used for clearly defined image types, but results must not be described as automated if parameters are adjusted arbitrarily for every image.
+- A complete pipeline ranking table;
+- The selected extraction, feature, and classification combination;
+- The final parameter settings;
+- A justified explanation of the selection;
+- Classification results for the dimer, trimer, and tetramer of P1;
+- A dedicated P2-versus-P3 result or evidence that they cannot be separated reliably;
+- Representative successful and failed cases.
 
-**Outputs:**
+## 6. Part D: Application to Other STM Images
 
-- Final detection figures for all 13 independent images
-- Count, valid area, density, dominant morphology, and quality flag for each image
-- Lists of images that were processed automatically, require manual review, or are unsuitable for the method
+### 6.1 Objective
 
-### Stage 8: Descriptive Analysis of APT Conditions
+Fix the best pipeline selected in Part C and apply it to the remaining unlabelled `.p` and `.sxm` images. The pipeline should produce molecular counts and classifications and allow its generalisability to be assessed.
 
-Analyse image-level conditions only within the APT data: Baseline, CO-tip, UV, and annealing. Because scan areas differ across images, use:
+### 6.2 Main Process
 
 ```text
-molecular density = molecule count / valid scan area (nm^2)
+Load another STM image
+→ Apply the same preprocessing and segmentation procedure
+→ Extract molecular contours and centre points
+→ Calculate the total molecule count
+→ Extract the same features
+→ Apply the selected classifier or clustering rule
+→ Assign a category to each molecule
+→ Calculate the count and proportion of each category
+→ Overlay the detection and classification results on the original image
+→ Perform manual spot checks and analyse generalisability
 ```
 
-Also compare morphology proportions, clustered fraction, and uncertainty. The image, rather than each molecule, is the independent experimental unit for condition comparisons. Hundreds of molecules within one image must not be treated as hundreds of independent experimental replicates. If a condition is represented by only one image, report descriptive comparisons only and do not claim a causal effect.
+### 6.3 Evaluation Without Complete Ground Truth
 
-**Outputs:**
+Because the remaining images do not have complete manual labels, their true accuracy should not be claimed directly. Instead, the project can:
 
-- APT condition count-density comparisons
-- Morphology-proportion plots
-- A limitations statement covering sample size, imaging conditions, and potential confounding
+- manually count randomly selected image regions;
+- inspect samples for false positives, false negatives, and classification errors;
+- compare molecular counts and category distributions across images;
+- record the effects of background variation, noise, scan direction, and image quality;
+- identify the conditions under which the pipeline is stable and the conditions under which it fails.
 
-### Stage 9: Client Recommendations
+### 6.4 Outputs
 
-The final conclusions must answer:
+For each image, the project should produce:
 
-1. Which pipeline is most suitable for routine molecule counting in STM images?
-2. Under which image-quality conditions can processing be automated?
-3. Which situations require manual inspection or parameter adjustment?
-4. Which fingerprint set is most effective: Zernike, geometric, or combined?
-5. Are the available data sufficient to support statistical conclusions about condition effects?
+- The total molecule count;
+- Molecular centre coordinates and contours;
+- The predicted category of each molecule;
+- The count and proportion of each category;
+- A detection and classification overlay figure;
+- Manual spot-check records;
+- An analysis of generalisation and failure causes.
 
-## 5. Notebook and Output Structure
-
-Recommended notebook sequence:
-
-| Notebook | Primary responsibility |
-| :--- | :--- |
-| `01_Data_Inspection.ipynb` | Data registration, quality assessment, and duplicate detection |
-| `02_Paper_Baseline_Reproduction.ipynb` | Reproduce the three examples from the paper |
-| `03_Manual_Annotation.ipynb` | Annotate manual centres and morphologies |
-| `04_Improved_Preprocessing_Segmentation.ipynb` | Improve preprocessing, ROI handling, thresholding, and watershed segmentation |
-| `05_Features_Classification_Evaluation.ipynb` | Evaluate fingerprints, categorisation, and model performance |
-| `06_Full_Dataset_Condition_Analysis.ipynb` | Produce full-dataset outputs and analyse APT conditions |
-
-Recommended directory structure:
+## 7. Overall Project Logic
 
 ```text
-CountingMolecules/
-├── ProjectData/                  # Raw data; read only
-├── Materials/                    # Papers and background materials
-├── annotations/                  # Manual annotations and annotation rules
-├── notebooks/                    # Formal analysis notebooks
-├── src/                          # Reusable reading, preprocessing, segmentation, and evaluation functions
-├── outputs/
-│   ├── figures/
-│   ├── masks/
-│   ├── tables/
-│   └── models/
-├── README.md
-└── Project_Workflow_EN.md
+Part A: Use Helicene_Ag(111)008.sxm to identify the best method for finding molecules
+→ Part B: Use the same image to identify the best method for classifying molecules
+→ Part C: Use the same image to select the best complete algorithm combination
+→ Part D: Test whether the selected pipeline generalises to other STM images
 ```
 
-## 6. GitHub and Reproducibility
-
-- Whether raw large files are included in GitHub should be determined by the course repository limits; code and small result tables must be version controlled.
-- Every notebook should use relative paths or a common configuration rather than absolute paths tied to one computer.
-- Parameters should be stored in tables or configuration objects, not only in temporary notebook variables.
-- Baseline and improved results must be saved separately to prevent accidental overwriting.
-- Commit messages should identify the completed data or modelling stage.
-- The README should record environment dependencies, execution order, data sources, and known limitations.
-
-## 7. Final Report Structure and Alignment with the Marking Criteria
-
-The submission should be written as a client report. The main text must not exceed 20 pages; code and detailed parameters should be placed in the appendix.
-
-| Section | Suggested length | Project content |
-| :--- | :---: | :--- |
-| Executive Summary | 2 pages | Problem, key results, and client recommendations |
-| Introduction | 2 pages | STM context, data sources, research questions, hypotheses, and literature |
-| Data Quality | 2 pages | File structure, duplicate image, field of view, noise, scan lines, and artifacts |
-| Model Development | 4 pages | Baseline and improved methods, fingerprints, assumptions, and limitations |
-| Results | 6 pages | Manual validation, model comparison, metrics, failure cases, and full-dataset performance |
-| Conclusions | 2 pages | Conclusions, applicable operating range, recommendations, and future work |
-| Appendix | Excluded from main-text limit | Code, complete parameters, additional images, and detailed result tables |
-
-Evidence supporting a High Distinction includes:
-
-- Multiple credible and relevant sources on STM, image processing, and molecular recognition
-- Analysis of the published method's assumptions, implementation, and limitations, rather than merely describing what it did
-- Conclusions supported by manual ground truth and quantitative metrics
-- Explanation of failure cases and the range over which conclusions apply
-- Translation of analytical findings into actionable client recommendations
-- Figures with clear titles whose significance is explained in the text
-- A consistent citation style and complete reference list
-
-The component percentages listed in the Final Report Guidelines sum to 110%, which may be a formatting error. The actual weighting should be confirmed using the Moodle rubric or the teaching team's latest advice.
-
-## 8. Project Priorities
-
-### Must Complete
-
-1. Assess data quality and handle duplicate files.
-2. Reproduce the three examples from the paper.
-3. Manually annotate molecular centres in the three benchmark images.
-4. Implement at least one improved preprocessing method and watershed segmentation.
-5. Calculate baseline-versus-improved detection and counting metrics.
-6. Compare at least two molecular-fingerprint sets.
-7. Present clear failure modes, limitations, and client recommendations.
-
-### Complete If Time Permits
-
-1. Extend manual annotations to three hard cases.
-2. Process all 13 independent images automatically.
-3. Conduct a descriptive comparison of APT conditions.
-4. Develop a supervised morphology classifier.
-5. Develop an interactive manual-review tool.
-
-Priority must be given to the research questions, baseline, ground truth, model comparison, and defensible conclusions. Adding many features must not substitute for analytical depth.
-
-## 9. Definition of Done
-
-The project is complete only when all of the following conditions are met:
-
-- All primary-analysis files are readable and duplicate samples are not counted twice.
-- The three examples from the paper have baseline reproduction results.
-- The benchmark images have independent manual annotations.
-- The baseline and improved methods are compared against the same ground truth.
-- Every evaluated image has TP, FP, FN, and count-error results.
-- Fingerprint selection is supported by experimental evidence.
-- The results clearly distinguish species, condition, and morphology.
-- All parameters, figures, and outputs in the pipeline are reproducible.
-- Report conclusions do not extend beyond what the data support.
-- The final report provides specific client recommendations rather than only presenting code and images.
+This structure evaluates detection and classification separately, making it possible to identify which stage causes a performance difference. The final end-to-end evaluation and application to additional images then provide a complete and interpretable project conclusion.
